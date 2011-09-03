@@ -105,7 +105,7 @@ but is made simpler by the coding by convention paradigm.
 
     def doWithDynamicMethods = {ctx ->
         def random = new Random()
-        Scheduler quartzScheduler = ctx.getBean('quartzScheduler')
+        Scheduler quartzScheduler = (Scheduler)ctx.getBean('quartzScheduler')
         application.jobClasses.each {GrailsJobClass tc ->
             def mc = tc.metaClass
             def jobName = tc.getFullName()
@@ -121,52 +121,84 @@ but is made simpler by the coding by convention paradigm.
             }
 
             mc.'static'.schedule = { String cronExpression, Map params = null ->
-                Trigger trigger = new CronTrigger(generateTriggerName(), Constants.DEFAULT_TRIGGERS_GROUP, jobName, jobGroup, cronExpression)
-                if (tc.getVolatility()) trigger.setVolatility(true)
+                Trigger trigger = TriggerBuilder.newTrigger()
+                    .withIdentity(generateTriggerName(), Constants.DEFAULT_TRIGGERS_GROUP)
+                    .forJob(jobName, jobGroup)
+                    .usingJobData(params ? new JobDataMap(params) : null)
+                    .withSchedule(CronScheduleBuilder.cronSchedule(cronExpression))
+                    .build();
+                //TODO Handle volatility
+                //if (tc.getVolatility()) trigger.setVolatility(true)
                 if (params) trigger.jobDataMap.putAll(params)
                 quartzScheduler.scheduleJob(trigger)
             }
             mc.'static'.schedule = {Long interval, Integer repeatCount = SimpleTrigger.REPEAT_INDEFINITELY, Map params = null ->
-                Trigger trigger = new SimpleTrigger(generateTriggerName(), Constants.DEFAULT_TRIGGERS_GROUP, jobName, jobGroup, new Date(), null, repeatCount, interval)
-                if (tc.getVolatility()) trigger.setVolatility(true)
-                if (params) trigger.jobDataMap.putAll(params)
+                Trigger trigger = TriggerBuilder.newTrigger()
+                    .withIdentity(generateTriggerName(), Constants.DEFAULT_TRIGGERS_GROUP)
+                    .forJob(jobName, jobGroup)
+                    .usingJobData(params ? new JobDataMap(params) : null)
+                    .withSchedule(SimpleScheduleBuilder.simpleSchedule()
+                        .withIntervalInMilliseconds(interval)
+                        .withRepeatCount(repeatCount))
+                    .startAt(new Date())
+                    .endAt(null)
+                    .build();
+                //TODO Handle volatility
+                //if (tc.getVolatility()) trigger.setVolatility(true)
                 quartzScheduler.scheduleJob(trigger)
             }
             mc.'static'.schedule = {Date scheduleDate ->
-                Trigger trigger = new SimpleTrigger(generateTriggerName(), Constants.DEFAULT_TRIGGERS_GROUP, jobName, jobGroup, scheduleDate, null, 0, 0)
-                if (tc.getVolatility()) trigger.setVolatility(true)
+                Trigger trigger = TriggerBuilder.newTrigger()
+                    .withIdentity(generateTriggerName(), Constants.DEFAULT_TRIGGERS_GROUP)
+                    .forJob(jobName, jobGroup)
+                    .withSchedule(SimpleScheduleBuilder.simpleSchedule()
+                        .withIntervalInMilliseconds(0)
+                        .withRepeatCount(0))
+                    .startAt(scheduleDate)
+                    .endAt(null)
+                    .build();
+                //TODO Handle volatility
+                //if (tc.getVolatility()) trigger.setVolatility(true)
                 quartzScheduler.scheduleJob(trigger)
             }
             mc.'static'.schedule = {Date scheduleDate, Map params ->
-                Trigger trigger = new SimpleTrigger(generateTriggerName(), Constants.DEFAULT_TRIGGERS_GROUP, jobName, jobGroup, scheduleDate, null, 0, 0)
-                if (tc.getVolatility()) trigger.setVolatility(true)
+                Trigger trigger = TriggerBuilder.newTrigger()
+                    .withIdentity(generateTriggerName(), Constants.DEFAULT_TRIGGERS_GROUP)
+                    .forJob(jobName, jobGroup)
+                    .usingJobData(params ? new JobDataMap(params) : null)
+                    .withSchedule(SimpleScheduleBuilder.simpleSchedule()
+                        .withIntervalInMilliseconds(0)
+                        .withRepeatCount(0))
+                    .startAt(scheduleDate)
+                    .endAt(null)
+                    .build();
+                //TODO Handle volatility
+                //if (tc.getVolatility()) trigger.setVolatility(true)
                 if (params) trigger.jobDataMap.putAll(params)
                 quartzScheduler.scheduleJob(trigger)
             }
             mc.'static'.schedule = {Trigger trigger ->
-                trigger.jobName = jobName
-                trigger.jobGroup = jobGroup
+                trigger = trigger.triggerBuilder.forJob(jobName, jobGroup).build();
                 quartzScheduler.scheduleJob(trigger)
             }
             mc.'static'.triggerNow = { Map params = null ->
-                if (tc.getVolatility()) {
-                    quartzScheduler.triggerJobWithVolatileTrigger(jobName, jobGroup, params ? new JobDataMap(params) : null)
-                } else {
-                    quartzScheduler.triggerJob(jobName, jobGroup, params ? new JobDataMap(params) : null)
-                }
+                quartzScheduler.triggerJob(new JobKey(jobName, jobGroup), params ? new JobDataMap(params) : null)
+                //TODO Handle volatility
+                //if (tc.getVolatility())
+                //    quartzScheduler.triggerJobWithVolatileTrigger(jobName, jobGroup, params ? new JobDataMap(params) : null)
             }
             mc.'static'.removeJob = {
-                quartzScheduler.deleteJob(jobName, jobGroup)
+                quartzScheduler.deleteJob(new JobKey(jobName, jobGroup))
             }
 
             mc.'static'.reschedule = {Trigger trigger ->
-                trigger.jobName = jobName
-                trigger.jobGroup = jobGroup
-                quartzScheduler.rescheduleJob(trigger.name, trigger.group, trigger)
+                trigger = (Trigger)trigger.triggerBuilder.forJob(jobName, jobGroup).build();
+
+                quartzScheduler.rescheduleJob(trigger.getKey(), trigger)
             }
 
             mc.'static'.unschedule = {String triggerName, String triggerGroup = Constants.DEFAULT_TRIGGERS_GROUP ->
-                quartzScheduler.unscheduleJob(triggerName, triggerGroup)
+                quartzScheduler.unscheduleJob(new TriggerKey(triggerName, triggerGroup))
             }
         }
     }

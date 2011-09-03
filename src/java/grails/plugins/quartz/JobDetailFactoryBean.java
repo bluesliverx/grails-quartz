@@ -16,10 +16,14 @@
 
 package grails.plugins.quartz;
 
-import org.quartz.JobDetail;
+import org.quartz.*;
+import org.quartz.impl.matchers.KeyMatcher;
+import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.FactoryBean;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Required;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
 import org.springframework.scheduling.quartz.SchedulerFactoryBean;
 
 /**
@@ -30,7 +34,13 @@ import org.springframework.scheduling.quartz.SchedulerFactoryBean;
  * @author Sergey Nebolsin (nebolsin@gmail.com)
  * @since 0.3.2
  */
-public class JobDetailFactoryBean implements FactoryBean, InitializingBean {
+public class JobDetailFactoryBean implements FactoryBean, InitializingBean, ApplicationContextAware {
+	private ApplicationContext applicationContext;
+
+	public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+		this.applicationContext = applicationContext;
+	}
+
     public static final transient String JOB_NAME_PARAMETER = "org.grails.plugins.quartz.grailsJobName";
 
     private String name;
@@ -47,7 +57,7 @@ public class JobDetailFactoryBean implements FactoryBean, InitializingBean {
      * <p>Default is the bean name of this FactoryBean.
      *
      * @param name name of the job
-     * @see org.quartz.JobDetail#setName
+     * @see org.quartz.JobDetail#getKey
      */
     public void setName(final String name) {
         this.name = name;
@@ -58,7 +68,7 @@ public class JobDetailFactoryBean implements FactoryBean, InitializingBean {
      * <p>Default is the default group of the Scheduler.
      *
      * @param group group name of the job
-     * @see org.quartz.JobDetail#setGroup
+     * @see org.quartz.JobDetail#getKey
      * @see org.quartz.Scheduler#DEFAULT_GROUP
      */
     public void setGroup(final String group) {
@@ -118,18 +128,25 @@ public class JobDetailFactoryBean implements FactoryBean, InitializingBean {
         Class jobClass = (concurrent ? GrailsJobFactory.GrailsJob.class : GrailsJobFactory.StatefulGrailsJob.class);
 
         // Build JobDetail instance.
-        jobDetail = new JobDetail(name, group, jobClass);
-        jobDetail.getJobDataMap().put(JOB_NAME_PARAMETER, name);
-        jobDetail.setDurability(durability);
-        jobDetail.setVolatility(volatility);
-        jobDetail.setRequestsRecovery(requestsRecovery);
+        jobDetail = JobBuilder.newJob(jobClass)
+            .withIdentity(name, group)
+            .storeDurably(durability)
+       		.requestRecovery(requestsRecovery)
+			.usingJobData(JOB_NAME_PARAMETER, name)
+			.build();
 
         // Register job listener names.
+		Scheduler quartzScheduler = (Scheduler)applicationContext.getBean("quartScheduler");
+		try {
+		ListenerManager listenerManager = quartzScheduler.getListenerManager();
         if (jobListenerNames != null) {
             for (String jobListenerName : jobListenerNames) {
-                jobDetail.addJobListener(jobListenerName);
+                listenerManager.addJobListenerMatcher(jobListenerName, KeyMatcher.keyEquals(jobDetail.getKey()));
             }
         }
+		} catch(Exception ex) {
+			//TODO Handle exception when retrieving listener
+		}
     }
 
     /**

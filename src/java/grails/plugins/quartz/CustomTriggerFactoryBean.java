@@ -18,6 +18,7 @@ package grails.plugins.quartz;
 
 import org.quartz.JobDetail;
 import org.quartz.Trigger;
+import org.quartz.TriggerBuilder;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.BeanWrapper;
 import org.springframework.beans.PropertyAccessorFactory;
@@ -43,16 +44,16 @@ public class CustomTriggerFactoryBean implements FactoryBean, InitializingBean {
 
     public void afterPropertiesSet() throws ParseException {
         customTrigger = BeanUtils.instantiateClass(triggerClass);
+		TriggerBuilder builder = customTrigger.getTriggerBuilder();
 
         if (triggerAttributes.containsKey(GrailsJobClassConstants.START_DELAY)) {
             Number startDelay = (Number) triggerAttributes.remove(GrailsJobClassConstants.START_DELAY);
-            customTrigger.setStartTime(new Date(System.currentTimeMillis() + startDelay.longValue()));
+			builder = builder.startAt(new Date(System.currentTimeMillis() + startDelay.longValue()));
         }
 
-        if (jobDetail != null) {
-            customTrigger.setJobName(jobDetail.getName());
-            customTrigger.setJobGroup(jobDetail.getGroup());
-        }
+        if (jobDetail != null)
+			builder = builder.forJob(jobDetail);
+		customTrigger = builder.build();
 
         BeanWrapper customTriggerWrapper = PropertyAccessorFactory.forBeanPropertyAccess(customTrigger);
         customTriggerWrapper.registerCustomEditor(String.class, new StringEditor());

@@ -34,26 +34,45 @@ import java.lang.reflect.Method;
  * @since 0.3.2
  */
 public class GrailsJobFactory extends AdaptableJobFactory implements ApplicationContextAware {
-    private ApplicationContext applicationContext;
+	private ApplicationContext applicationContext;
 
-    protected Object createJobInstance(TriggerFiredBundle bundle) throws Exception {
-        String grailsJobName = (String) bundle.getJobDetail().getJobDataMap().get(JobDetailFactoryBean.JOB_NAME_PARAMETER);
-        if (grailsJobName != null) {
-            Object job = applicationContext.getBean(grailsJobName);
-            if (bundle.getJobDetail().getJobClass().equals(StatefulGrailsJob.class)) {
-                return new StatefulGrailsJob(job);
-            }
-            return new GrailsJob(job);
-        } else {
-            return super.createJobInstance(bundle);
-        }
-    }
+	protected Object createJobInstance(TriggerFiredBundle bundle) throws Exception {
+		String grailsJobName = (String) bundle.getJobDetail().getJobDataMap().get(JobDetailFactoryBean.JOB_NAME_PARAMETER);
+		if (grailsJobName != null) {
+			Object job = applicationContext.getBean(grailsJobName);
+			if (bundle.getJobDetail().getJobClass().equals(StatefulGrailsJob.class)) {
+				return new StatefulGrailsJob(job);
+			}
+			return new GrailsJob(job);
+		} else {
+			return super.createJobInstance(bundle);
+		}
+	}
 
-    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
-        this.applicationContext = applicationContext;
-    }
+	public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+		this.applicationContext = applicationContext;
+	}
 
-    /**
+	public Job newJob(TriggerFiredBundle bundle, Scheduler scheduler) throws SchedulerException {
+		String grailsJobName = (String) bundle.getJobDetail().getJobDataMap().get(JobDetailFactoryBean.JOB_NAME_PARAMETER);
+		if (grailsJobName != null) {
+			Object job = applicationContext.getBean(grailsJobName);
+			if (bundle.getJobDetail().getJobClass().equals(StatefulGrailsJob.class)) {
+				return new StatefulGrailsJob(job);
+			}
+			return new GrailsJob(job);
+		} else {
+			try {
+				return (Job)super.createJobInstance(bundle);
+			} catch(Exception ex) {
+				if (ex.getClass()==SchedulerException.class)
+					throw (SchedulerException)ex;
+				return null;
+			}
+		}
+	}
+
+	/**
      * Quartz Job implementation that invokes execute() on the application's job class.
      */
     public class GrailsJob implements InterruptableJob {
@@ -120,13 +139,14 @@ public class GrailsJobFactory extends AdaptableJobFactory implements Application
      * Quartz checks whether or not jobs are stateful and if so,
      * won't let jobs interfere with each other.
      */
-    public class StatefulGrailsJob extends GrailsJob implements StatefulJob {
-        // No implementation, just an addition of the tag interface StatefulJob
+	@PersistJobDataAfterExecution
+	@DisallowConcurrentExecution
+    public class StatefulGrailsJob extends GrailsJob {
+        // No implementation, just an addition of the "stateful" tag annotations
         // in order to allow stateful jobs.
 
         public StatefulGrailsJob(Object job) {
             super(job);
         }
     }
-
 }
