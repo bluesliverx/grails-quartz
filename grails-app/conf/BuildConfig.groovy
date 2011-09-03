@@ -14,7 +14,7 @@ grails.project.dependency.resolution = {
 
     dependencies {
         // specify dependencies here under either 'build', 'compile', 'runtime', 'test' or 'provided' scopes eg.
-        compile('org.hibernate:hibernate-core:3.3.1.GA', "org.quartz-scheduler:quartz:1.8.4") {
+        compile('org.hibernate:hibernate-core:3.3.1.GA', "org.quartz-scheduler:quartz:2.0.2") {
             excludes 'ehcache', 'xml-apis', 'commons-logging'
         }
     }
